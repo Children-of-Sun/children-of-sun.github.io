@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>工厂计算器 · 最终完整版</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 1200px; margin: 20px auto; }
+        .section { margin: 15px 0; border: 1px solid #ccc; padding: 12px; border-radius: 6px; }
+        label { margin-right: 10px; }
+        .flex-row { display: flex; gap: 15px; flex-wrap: wrap; align-items: center; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 6px; text-align: right; }
+        th { background: #f0f0f0; }
+        td:first-child { text-align: left; }
+        .btn { padding: 8px 16px; cursor: pointer; background: #2563eb; color: white; border: none; border-radius: 4px; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        .btn:hover:not(:disabled) { background: #1d4ed8; }
+        .hint { color: #666; font-size: 13px; }
+        ul { list-style: none; padding-left: 0; }
+        li { margin: 4px 0; }
+        .stat { background: #e8f0fe; padding: 8px; border-radius: 6px; margin: 10px 0; }
+        .level-modal { display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; overflow:auto; background:rgba(0,0,0,0.5); }
+        .level-modal-content { background:white; margin:40px auto; padding:20px; border-radius:8px; width:500px; max-height:80vh; overflow-y:auto; }
+        .level-series { margin-bottom:10px; display:flex; align-items:center; gap:10px; }
+        .level-series select { padding:4px; }
+        .modal { display:none; position:fixed; z-index:1000; left:0; top:0; width:100%; height:100%; overflow:auto; background:rgba(0,0,0,0.5); }
+        .modal-content { background:white; margin:40px auto; padding:20px; border-radius:8px; width:90%; max-width:1000px; max-height:80vh; overflow-y:auto; }
+        .modal-header { display:flex; justify-content:space-between; align-items:center; }
+        .close-btn { font-size:24px; cursor:pointer; }
+        .modal-footer { margin-top:15px; display:flex; gap:10px; }
+        .recipe-panel { display:flex; gap:15px; }
+        .category-tabs { width:180px; border-right:1px solid #ddd; overflow-y:auto; max-height:60vh; }
+        .category-tab { padding:6px 10px; cursor:pointer; border-radius:4px; margin:2px 0; }
+        .category-tab.active { background:#2563eb; color:white; }
+        .building-list { flex:1; }
+        .building-block { margin-bottom:8px; border:1px solid #eee; padding:6px; }
+        .building-header { display:flex; align-items:center; gap:8px; }
+        .building-toggle { cursor:pointer; }
+        .building-name { font-weight:bold; cursor:pointer; flex:1; }
+        .recipe-sublist { margin-top:4px; margin-left:20px; display:none; }
+        .recipe-sublist.open { display:block; }
+        .recipe-entry { display:flex; align-items:center; gap:10px; margin:2px 0; }
+        .recipe-info { font-size:12px; color:#555; }
+        .missing-producer { color:#d93025; cursor:pointer; text-decoration:underline; margin-left:6px; }
+        .disabled-note { color:#999; font-size:12px; }
+        .fix-btn { color:#2563eb; cursor:pointer; margin-left:8px; font-size:12px; text-decoration:underline; }
+        .exclude-list { max-height:60vh; overflow-y:auto; }
+        .exclude-item { display:flex; align-items:center; gap:10px; padding:4px 0; border-bottom:1px solid #eee; }
+        .exclude-item-name { flex:1; }
+        .exclude-buildings { font-size:12px; color:#555; }
+        .space-station-row { display:flex; align-items:center; gap:15px; margin:8px 0; }
+        .slider-container { display:flex; align-items:center; gap:10px; }
+        .search-box { margin-bottom:10px; }
+        .search-box input { padding:6px; width:300px; border:1px solid #ccc; border-radius:4px; }
+    </style>
+</head>
+<body>
+    <h1>🏭 工厂计算器</h1>
+    <div class="section"><h3>📁 数据</h3><div class="flex-row"><div>配方JSON: <input type="file" id="jsonFile" accept=".json"> <span id="dataStatus" class="hint">未加载</span></div><div>翻译JSON: <input type="file" id="transFile" accept=".json"> <span id="transStatus" class="hint">未加载翻译</span></div></div></div>
+    <div class="section"><h3>🏗️ 建筑等级</h3><div id="levelStat" class="stat">请先加载数据</div><div style="margin-top:4px;"><button class="btn" id="levelModalBtn" disabled>⚙️ 设置等级</button><button class="btn" id="recipeSelectBtn" disabled>🧪 选择配方</button></div></div>
+
+    <!-- 空间站 -->
+    <div class="section">
+        <h3>🚀 空间站</h3>
+        <div class="space-station-row"><label>等级: <input type="number" id="stationLevel" value="0" min="0" step="1" style="width:60px;" disabled></label>
+        <label>火箭: <select id="rocketType" disabled><option value="0">Rocket T1</option><option value="1" selected>Rocket T2</option></select></label></div>
+        <div class="space-station-row slider-container"><label>火箭科技: <span id="techDisplay">5</span></label><input type="range" id="techLevel" min="0" max="10" value="5" step="1" disabled style="width:150px;"></div>
+        <div class="space-station-row"><span>人口: <b id="stationPop">0</b></span><span>人员火箭: <b id="crewRocketRate">0</b> /分</span><span>物资火箭: <b id="cargoRocketRate">0</b> /分</span></div>
+        <div class="hint" id="rocketConsumption"></div>
+    </div>
+
+    <!-- 雕像 -->
+    <div class="section"><h3>🗿 雕像 (The Statue of Maintenance)</h3>
+        <div class="space-station-row"><label>数量: <input type="number" id="statueCount" value="0" min="0" step="1" style="width:60px;" disabled></label>
+        <span>维护减免: <b id="statueReduction">0%</b></span><span>消耗 Fuel Gas: <b id="statueFuel">0.00</b> /分</span></div>
+    </div>
+
+    <!-- 研究所 -->
+    <div class="section"><h3>🔬 研究所 (Research Lab)</h3>
+        <div class="space-station-row"><label>等级: <select id="labLevel" disabled></select></label>
+        <label>数量: <input type="number" id="labCount" value="0" min="0" step="1" style="width:60px;" disabled></label>
+        <span>研究产出: <b id="researchOutput">0</b> /分</span><span>消耗 Lab Equipment: <b id="labEquipmentRate">0.00</b> /分</span></div>
+    </div>
+
+    <!-- 生产目标（弹窗选择） -->
+    <div class="section"><h3>🎯 生产目标</h3>
+        <button class="btn" id="addDemandBtn" disabled>🎯 选择产品</button>
+        <ul id="demandList"></ul>
+    </div>
+
+    <div class="section"><h3>⚙️ 选项</h3>
+        <div style="margin-bottom:8px;">
+            <label><input type="checkbox" class="ignoreCheck" value="electricity"> 电力</label>
+            <label><input type="checkbox" class="ignoreCheck" value="computing"> 算力</label>
+            <label><input type="checkbox" class="ignoreCheck" value="人力"> 人力</label>
+            <label><input type="checkbox" class="ignoreCheck" value="maintenance i"> 维护I</label>
+            <label><input type="checkbox" class="ignoreCheck" value="maintenance ii"> 维护II</label>
+            <label><input type="checkbox" class="ignoreCheck" value="maintenance iii"> 维护III</label>
+        </div>
+        <div style="margin-bottom:8px;">
+            <label><input type="checkbox" id="allowExternal"> 允许外部供给</label>
+            <label><input type="checkbox" id="hideStage" checked> 隐藏中间产物（含 stage）</label>
+            <label><input type="checkbox" id="diagnosticMode"> 诊断模式</label>
+        </div>
+        <button class="btn" id="excludeItemsBtn" disabled>🔧 排除产物</button>
+    </div>
+    <button class="btn" id="calculateBtn" disabled>🔧 开始求解</button>
+    <span id="recipeCount" class="hint"></span>
+    <div id="resultArea" class="section" style="display:none;">
+        <div id="resultMessage"></div>
+        <div id="diagnosticOutput" style="display:none; background:#fff3cd; padding:8px; white-space:pre-wrap; font-size:13px;"></div>
+        <h4>机器分配</h4>
+        <table id="resultTable"><thead><tr><th>配方名称</th><th>建筑</th><th>等级</th><th>机器</th><th>投入/分</th><th>产出/分</th></tr></thead><tbody></tbody></table>
+        <h4>资源总览</h4>
+        <table id="balanceTable"><thead><tr><th>物品</th><th>产出/分</th><th>消耗/分</th><th>净产出</th><th>操作</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <!-- 弹窗 -->
+    <div id="levelModal" class="level-modal"><div class="level-modal-content"><h2>设置建筑等级</h2><div id="levelModalBody"></div><div style="margin-top:12px; text-align:right;"><button class="btn" id="levelModalClose">确定</button></div></div></div>
+    <div id="recipeModal" class="modal"><div class="modal-content"><div class="modal-header"><h2>🧪 建筑与配方</h2><span class="close-btn" id="closeModalBtn">&times;</span></div><div class="search-box"><input type="text" id="recipeSearch" placeholder="搜索建筑或配方..."></div><div class="recipe-panel"><div class="category-tabs" id="modalCategoryTabs"></div><div class="building-list" id="modalBuildingList"></div></div><div class="modal-footer"><button class="btn" id="exportAllBtn">📤 导出全部设置</button><button class="btn" id="importAllBtn">📥 导入全部设置</button><input type="file" id="importAllFile" accept=".json" style="display:none"></div></div></div>
+    <div id="excludeModal" class="modal"><div class="modal-content" style="max-width:700px;"><div class="modal-header"><h2>🚫 排除产物（不参与平衡）</h2><span class="close-btn" id="closeExcludeBtn">&times;</span></div><div class="search-box"><input type="text" id="excludeSearch" placeholder="搜索中/英文..."></div><div class="exclude-list" id="excludeItemList"></div><div class="modal-footer"><button class="btn" id="excludeDoneBtn">完成</button></div></div></div>
+    <!-- 生产目标选择弹窗 -->
+    <div id="demandModal" class="modal"><div class="modal-content" style="max-width:700px;"><div class="modal-header"><h2>🎯 选择生产目标</h2><span class="close-btn" id="closeDemandModalBtn">&times;</span></div>
+        <div class="search-box"><input type="text" id="demandSearch" placeholder="搜索物品..."></div>
+        <div class="exclude-list" id="demandItemList"></div>
+        <div class="flex-row" style="margin-top:10px;"><label>产量/分: <input type="number" id="demandRateInput" value="100" min="0.1" step="1" style="width:80px;"></label><button class="btn" id="addDemandFromModalBtn">➕ 添加</button></div>
+    </div></div>
+
+    <script type="module">
+        import Module from './highs.js';
+
+        let fullData=null, recipes=[], demands=[], translation={}, allItemsSet=new Set(), seriesList=[],
+            seriesEnabled=new Map(), seriesSelectedLevel=new Map(), recipeEnabled=new Map(),
+            currentCategory=null, excludedItems=new Set();
+        let labMeta=[], selectedDemandItem=null;
+
+        const HIDDEN_SERIES = ['Cargo depot','Unit module','Loose module','Fluid module','Unit storage','Loose storage','Fluid storage','Research lab'];
+        const RAW_ITEMS = new Set(["limestone","wood","rock","quartz","coal","sand","sulfur","salt","stone","iron ore","copper ore","uranium ore","gold ore","bauxite","titanium ore","seawater","air","water","crude oil","imported goods","retired waste","spent mox","人力"]);
+
+        function t(k) { return translation[k?.toLowerCase()] || k; }
+        function isRaw(item) { return RAW_ITEMS.has(item?.toLowerCase()); }
+        function isExcluded(item) { return excludedItems.has(item?.toLowerCase()); }
+        function isPowerItem(name) { return name==='mechanical power'||name==='electricity'||name==='computing'; }
+
+        const ROCKET_BASE = [
+            { name:"Rocket T1", crewBase:4, cargoBase:40, crewMax:8, cargoMax:80, rlpKey:"rockett1 rlp", thingKey:"rockett1 thing" },
+            { name:"Rocket T2", crewBase:12, cargoBase:120, crewMax:24, cargoMax:240, rlpKey:"rockett2 rlp", thingKey:"rockett2 thing" }
+        ];
+
+        const STATION_PARTS_RATE=0.25, CREW_SUPPLIES_RATE=0.2;
+
+        function getMaintenanceReduction(count) {
+            if (count <= 0) return 0;
+            let total = 0.04;
+            if (count >= 2) total += 0.02;
+            if (count >= 3) total += 0.01;
+            let addition = 0.005;
+            for (let i = 4; i <= count; i++) { total += addition; addition /= 2; }
+            return Math.min(total, 1);
+        }
+
+        // 解析数据
+        function parseData(d) {
+            const blds = d.machines_and_buildings, map = new Map(blds.map(b => [b.id, b]));
+            const lvMap = new Map(), parentMap = new Map();
+            blds.forEach(b => { if (b.next_tier) parentMap.set(b.next_tier, b.id); });
+            const notRoot = new Set(parentMap.keys());
+            function assign(id, lvl) { if (!lvMap.has(id)) { lvMap.set(id, lvl); const nb = map.get(id); if (nb && nb.next_tier) assign(nb.next_tier, lvl+1); } }
+            blds.forEach(b => { if (!notRoot.has(b.id)) assign(b.id, 1); });
+            blds.forEach(b => { if (!lvMap.has(b.id)) lvMap.set(b.id, 1); });
+
+            const visited = new Set(), series = [];
+            blds.forEach(b => {
+                if (visited.has(b.id)) return;
+                let h = b.id; while (parentMap.has(h)) h = parentMap.get(h);
+                const ids = []; let cur = h;
+                while (cur) { ids.push(cur); visited.add(cur); cur = map.get(cur)?.next_tier || null; }
+                ids.sort((a,b) => lvMap.get(a) - lvMap.get(b));
+                const levels = ids.map(id => ({
+                    buildingId: id, level: lvMap.get(id),
+                    recipeIds: (map.get(id)?.recipes || []).map(r => r.id),
+                }));
+                const sname = map.get(ids[0]).name;
+                if (!HIDDEN_SERIES.some(k => sname.toLowerCase().includes(k.toLowerCase()))) series.push({ name: sname, levels });
+            });
+
+            const allRecipes = [];
+            blds.forEach(b => {
+                const lv = lvMap.get(b.id);
+                (b.recipes || []).forEach(r => {
+                    const inp = {}, out = {}, up = {};
+                    (r.inputs || []).forEach(i => inp[i.name.toLowerCase()] = i.quantity);
+                    (r.outputs || []).forEach(o => out[o.name.toLowerCase()] = o.quantity);
+                    if (b.maintenance_cost_units && b.maintenance_cost_quantity) { const uk = b.maintenance_cost_units.toLowerCase(); up[uk] = (up[uk] || 0) + b.maintenance_cost_quantity; }
+                    up['人力'] = (up['人力'] || 0) + b.workers;
+                    up['electricity'] = (up['electricity'] || 0) + (b.electricity_consumed || 0) * (r.power_multiplier || 1);
+                    if (b.computing_consumed) up['computing'] = (up['computing'] || 0) + b.computing_consumed;
+                    allRecipes.push({ id: r.id, name: r.name, buildingId: b.id, buildingName: b.name, category: b.category, buildingLevel: lv, duration: r.duration, inputs: inp, outputs: out, upkeep: up, powerMultiplier: r.power_multiplier || 1, workers: b.workers, isHidden: HIDDEN_SERIES.some(k => b.name.toLowerCase().includes(k.toLowerCase())) });
+                });
+            });
+
+            const allItems = new Set();
+            allRecipes.forEach(r => { Object.keys(r.inputs).forEach(k => allItems.add(k)); Object.keys(r.outputs).forEach(k => allItems.add(k)); Object.keys(r.upkeep).forEach(k => allItems.add(k)); });
+
+            // 研究所数据
+            labMeta = [];
+            const labBuildings = blds.filter(b => b.research_speed > 0 && b.id.toLowerCase().startsWith('researchlab'));
+            labBuildings.sort((a,b) => lvMap.get(a.id) - lvMap.get(b.id));
+            labBuildings.forEach(b => {
+                const recipes = (b.recipes || []).map(r => {
+                    const inp = {}, out = {};
+                    (r.inputs||[]).forEach(i => inp[i.name.toLowerCase()] = i.quantity);
+                    (r.outputs||[]).forEach(o => out[o.name.toLowerCase()] = o.quantity);
+                    return { id: r.id, inputs: inp, outputs: out, duration: r.duration };
+                });
+                const upkeep = allRecipes.find(r => r.buildingId === b.id && r.buildingLevel === lvMap.get(b.id))?.upkeep || {};
+                labMeta.push({ buildingId: b.id, level: lvMap.get(b.id), name: b.name, recipes, upkeep });
+            });
+
+            return { recipes: allRecipes, allItems: [...allItems], seriesList: series };
+        }
+
+        function initializeAll(){
+            seriesEnabled.clear(); seriesSelectedLevel.clear(); recipeEnabled.clear();
+            seriesList.forEach(s=>{
+                const hi=s.levels[s.levels.length-1].level;
+                seriesSelectedLevel.set(s.name,hi); seriesEnabled.set(s.name,true);
+                s.levels.forEach(lv=>lv.recipeIds.forEach(rid=>recipeEnabled.set(rid,true)));
+            });
+            recipes.forEach(r=>{ if(!recipeEnabled.has(r.id)) recipeEnabled.set(r.id,true); });
+        }
+
+        function getActiveRecipes(){
+            return recipes.filter(r=>{
+                if(!recipeEnabled.get(r.id)) return false;
+                const sn=getSeriesName(r.buildingId);
+                if(!seriesEnabled.get(sn)) return false;
+                const cl=seriesSelectedLevel.get(sn);
+                return cl!==undefined&&cl===r.buildingLevel;
+            });
+        }
+        function getSeriesName(bid){ return seriesList.find(s=>s.levels.some(lv=>lv.buildingId===bid))?.name||''; }
+
+        // UI更新函数（空间站、雕像、研究所）
+        function updateSpaceStation() {
+            const level = parseInt(document.getElementById('stationLevel').value)||0;
+            const rocketIdx = parseInt(document.getElementById('rocketType').value);
+            const tech = parseInt(document.getElementById('techLevel').value);
+            document.getElementById('techDisplay').textContent = tech;
+            if (level === 0) {
+                document.getElementById('stationPop').textContent='0';
+                document.getElementById('crewRocketRate').textContent='0';
+                document.getElementById('cargoRocketRate').textContent='0';
+                document.getElementById('rocketConsumption').innerHTML='火箭需求：无';
+                return;
+            }
+            const rocket = ROCKET_BASE[rocketIdx];
+            const crewCap = rocket.crewBase + (rocket.crewMax-rocket.crewBase)*(tech/10);
+            const cargoCap = rocket.cargoBase + (rocket.cargoMax-rocket.cargoBase)*(tech/10);
+            const crew = Math.max(0,(level-1)*2);
+            document.getElementById('stationPop').textContent = crew;
+            const rocketsPerLaunch = Math.ceil(crew/crewCap);
+            const crewRocketRate = rocketsPerLaunch/20;
+            document.getElementById('crewRocketRate').textContent = crewRocketRate.toFixed(4);
+            const stationPartsRate = level*STATION_PARTS_RATE;
+            const crewSuppliesRate = Math.max(0,(level-1)*CREW_SUPPLIES_RATE);
+            const cargoRocketRate = (stationPartsRate+crewSuppliesRate)/cargoCap;
+            document.getElementById('cargoRocketRate').textContent = cargoRocketRate.toFixed(4);
+            const lines=[];
+            if(crewRocketRate>0) lines.push(`${t(rocket.rlpKey)}: ${crewRocketRate.toFixed(4)}/分`);
+            if(cargoRocketRate>0) lines.push(`${t(rocket.thingKey)}: ${cargoRocketRate.toFixed(4)}/分`);
+            document.getElementById('rocketConsumption').innerHTML=`火箭需求：${lines.join('；')||'无'}`;
+        }
+
+        function updateStatue() {
+            const count = parseInt(document.getElementById('statueCount').value)||0;
+            document.getElementById('statueReduction').textContent = (getMaintenanceReduction(count)*100).toFixed(2)+'%';
+            document.getElementById('statueFuel').textContent = (count*2).toFixed(2);
+        }
+
+        function populateLabLevels() {
+            const sel = document.getElementById('labLevel');
+            sel.innerHTML = labMeta.map(l => `<option value="${l.buildingId}">${t(l.name)} (Lv.${l.level})</option>`).join('');
+            if (labMeta.length) { sel.value = labMeta[labMeta.length-1].buildingId; updateLab(); }
+        }
+
+        function updateLab() {
+            const buildingId = document.getElementById('labLevel').value;
+            const meta = labMeta.find(l => l.buildingId === buildingId);
+            if (!meta) return;
+            const count = parseInt(document.getElementById('labCount').value)||0;
+            // 计算配方消耗
+            let labEqRate = 0;
+            meta.recipes.forEach(r => {
+                if (r.inputs['lab equipment']) labEqRate += (60/r.duration)*r.inputs['lab equipment']*count;
+            });
+            document.getElementById('labEquipmentRate').textContent = labEqRate.toFixed(2);
+            const stationLvl = parseInt(document.getElementById('stationLevel').value)||0;
+            const researchPerLab = 48*(1+stationLvl*0.05);
+            const output = researchPerLab*count;
+            document.getElementById('researchOutput').textContent = output.toFixed(2);
+        }
+
+        function getAllFixedDemands() {
+            const fixed = [];
+            const stationLvl = parseInt(document.getElementById('stationLevel').value)||0;
+            if (stationLvl>0) fixed.push(...getStationDemands());
+            const statueN = parseInt(document.getElementById('statueCount').value)||0;
+            if (statueN>0) fixed.push({item:"fuel gas", rate:statueN*2});
+            const labN = parseInt(document.getElementById('labCount').value)||0;
+            const buildingId = document.getElementById('labLevel').value;
+            const meta = labMeta.find(l=>l.buildingId===buildingId);
+            if (meta && labN>0) {
+                meta.recipes.forEach(r => {
+                    for (const [item,qty] of Object.entries(r.inputs)) {
+                        fixed.push({item: item.toLowerCase(), rate: (60/r.duration)*qty*labN});
+                    }
+                });
+                for (const [item,qty] of Object.entries(meta.upkeep)) {
+                    fixed.push({item: item.toLowerCase(), rate: qty*labN});
+                }
+            }
+            return fixed;
+        }
+
+        function getStationDemands() {
+            const level = parseInt(document.getElementById('stationLevel').value)||0;
+            if (level===0) return [];
+            const rocketIdx = parseInt(document.getElementById('rocketType').value);
+            const tech = parseInt(document.getElementById('techLevel').value);
+            const rocket = ROCKET_BASE[rocketIdx];
+            const crewCap = rocket.crewBase + (rocket.crewMax-rocket.crewBase)*(tech/10);
+            const cargoCap = rocket.cargoBase + (rocket.cargoMax-rocket.cargoBase)*(tech/10);
+            const crew = Math.max(0,(level-1)*2);
+            const rocketsPerLaunch = Math.ceil(crew/crewCap);
+            const crewRocketRate = rocketsPerLaunch/20;
+            const stationPartsRate = level*STATION_PARTS_RATE;
+            const crewSuppliesRate = Math.max(0,(level-1)*CREW_SUPPLIES_RATE);
+            const cargoRocketRate = (stationPartsRate+crewSuppliesRate)/cargoCap;
+            const dem = [];
+            if(stationPartsRate>0) dem.push({item:"station parts", rate:stationPartsRate});
+            if(crewSuppliesRate>0) dem.push({item:"crew supplies", rate:crewSuppliesRate});
+            if(crewRocketRate>0) dem.push({item:rocket.rlpKey, rate:crewRocketRate});
+            if(cargoRocketRate>0) dem.push({item:rocket.thingKey, rate:cargoRocketRate});
+            return dem;
+        }
+
+        // 生产目标弹窗
+        function openDemandModal() {
+            const container = document.getElementById('demandItemList');
+            const items = [...allItemsSet].sort();
+            const render = (filter='') => {
+                const s = filter.toLowerCase();
+                const filt = items.filter(i => !s || i.includes(s) || t(i).toLowerCase().includes(s));
+                container.innerHTML = filt.map(i => `<div class="exclude-item" data-item="${i}">
+                    <span>${t(i)} (${i})</span>
+                </div>`).join('');
+                container.querySelectorAll('.exclude-item').forEach(el => {
+                    el.addEventListener('click', () => {
+                        container.querySelectorAll('.exclude-item').forEach(e => e.style.background='');
+                        el.style.background='#e0e0ff';
+                        selectedDemandItem = el.dataset.item;
+                    });
+                });
+            };
+            render();
+            document.getElementById('demandSearch').value='';
+            document.getElementById('demandSearch').oninput = ()=>render(document.getElementById('demandSearch').value);
+            document.getElementById('demandModal').style.display='block';
+        }
+
+        document.getElementById('addDemandBtn').addEventListener('click', openDemandModal);
+        document.getElementById('closeDemandModalBtn').addEventListener('click', ()=>document.getElementById('demandModal').style.display='none');
+        document.getElementById('addDemandFromModalBtn').addEventListener('click', ()=>{
+            const item = selectedDemandItem;
+            const rate = parseFloat(document.getElementById('demandRateInput').value);
+            if (item && rate>0) {
+                demands.push({item:item.toLowerCase(), rate});
+                updateDemandList();
+            }
+        });
+
+        // 配方弹窗（恢复建筑开关与配方详情）
+        function openRecipeModal(){
+            if(!fullData) return;
+            const blds = fullData.machines_and_buildings.filter(b => !HIDDEN_SERIES.some(k => b.name.toLowerCase().includes(k.toLowerCase())));
+            const entries = blds.map(b => {
+                const sn = getSeriesName(b.id);
+                const lv = seriesList.find(s => s.name === sn)?.levels.find(lv => lv.buildingId === b.id)?.level || 1;
+                const recs = (b.recipes || []).map(r => recipes.find(rr => rr.id === r.id)).filter(Boolean);
+                const buildingOn = seriesEnabled.get(sn) !== false && seriesSelectedLevel.get(sn) === lv;
+                return { buildingId: b.id, buildingName: b.name, category: b.category, level: lv, recipes: recs, buildingEnabled: buildingOn };
+            });
+            const cats = [...new Set(entries.map(e => e.category))].sort();
+            cats.push('🚫 已禁用');
+            const catC = document.getElementById('modalCategoryTabs');
+            catC.innerHTML = cats.map(c => `<div class="category-tab" data-cat="${c}">${t(c)}</div>`).join('');
+            catC.querySelectorAll('.category-tab').forEach(tab => tab.addEventListener('click', ()=>{
+                catC.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                currentCategory = tab.dataset.cat;
+                renderModalEntries(entries);
+            }));
+            if (cats.length) {
+                const ft = catC.querySelector('.category-tab');
+                ft.classList.add('active');
+                currentCategory = ft.dataset.cat;
+                renderModalEntries(entries);
+            } else document.getElementById('modalBuildingList').innerHTML = '<span class="hint">无建筑</span>';
+            document.getElementById('recipeModal').style.display = 'block';
+        }
+
+        function renderModalEntries(entries) {
+            const list = document.getElementById('modalBuildingList');
+            const s = document.getElementById('recipeSearch').value.toLowerCase();
+            const filt = entries.filter(e => {
+                if (currentCategory==='🚫 已禁用') return !e.buildingEnabled;
+                if (e.category !== currentCategory) return false;
+                if (s && !t(e.buildingName).toLowerCase().includes(s) && !e.recipes.some(r => t(r.name).toLowerCase().includes(s))) return false;
+                return true;
+            });
+            if (!filt.length) { list.innerHTML='<span class="hint">无匹配建筑</span>'; return; }
+            let html = '';
+            filt.forEach(e => {
+                html += `<div class="building-block">
+                    <div class="building-header">
+                        <input type="checkbox" class="building-toggle" data-series="${getSeriesName(e.buildingId)}" data-level="${e.level}" ${e.buildingEnabled?'checked':''}>
+                        <span class="building-name" data-id="${e.buildingId}">🏭 ${t(e.buildingName)} (Lv.${e.level})</span>
+                    </div>
+                    <div class="recipe-sublist" id="recipes-${e.buildingId}">`;
+                e.recipes.forEach(r => {
+                    const rOn = recipeEnabled.get(r.id) !== false;
+                    const imp = Object.entries(r.inputs).map(([k,v]) => `${t(k)}×${isPowerItem(k)?v:((60/r.duration)*v).toFixed(2)}`).join(', ')||'无';
+                    const oup = Object.entries(r.outputs).map(([k,v]) => `${t(k)}×${isPowerItem(k)?v:((60/r.duration)*v).toFixed(2)}`).join(', ')||'无';
+                    html += `<div class="recipe-entry">
+                        <label><input type="checkbox" class="recipe-cb" data-rid="${r.id}" ${rOn?'checked':''}> ${t(r.name)}</label>
+                        <span class="recipe-info">投入: ${imp} → 产出: ${oup}</span>
+                    </div>`;
+                });
+                html += '</div></div>';
+            });
+            list.innerHTML = html;
+            list.querySelectorAll('.building-toggle').forEach(cb => cb.addEventListener('change', function(){
+                const sn = this.dataset.series, lv = parseInt(this.dataset.level);
+                if (this.checked) { seriesEnabled.set(sn, true); seriesSelectedLevel.set(sn, lv); }
+                else if (seriesSelectedLevel.get(sn) === lv) seriesEnabled.set(sn, false);
+                updateRecipeCount(); openRecipeModal();
+            }));
+            list.querySelectorAll('.recipe-cb').forEach(cb => cb.addEventListener('change', function(){
+                recipeEnabled.set(this.dataset.rid, this.checked); updateRecipeCount();
+            }));
+            list.querySelectorAll('.building-name').forEach(el => el.addEventListener('click', ()=> document.getElementById('recipes-'+el.dataset.id)?.classList.toggle('open')));
+            if (s) list.querySelectorAll('.recipe-sublist').forEach(d => d.classList.add('open'));
+        }
+
+        // 导出导入
+        function exportAllSettings() {
+            const data = {
+                seriesEnabled: Object.fromEntries(seriesEnabled),
+                seriesLevels: Object.fromEntries(seriesSelectedLevel),
+                recipes: Object.fromEntries(recipeEnabled),
+                excluded: [...excludedItems],
+                stationLevel: document.getElementById('stationLevel').value,
+                rocketType: document.getElementById('rocketType').value,
+                techLevel: document.getElementById('techLevel').value,
+                statueCount: document.getElementById('statueCount').value,
+                labLevel: document.getElementById('labLevel').value,
+                labCount: document.getElementById('labCount').value
+            };
+            const blob = new Blob([JSON.stringify(data)], {type:'application/json'});
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'factory_settings.json'; a.click();
+        }
+
+        async function importAllSettings(file) {
+            const j = JSON.parse(await file.text());
+            if (j.seriesEnabled) seriesEnabled = new Map(Object.entries(j.seriesEnabled));
+            if (j.seriesLevels) seriesSelectedLevel = new Map(Object.entries(j.seriesLevels));
+            if (j.recipes) recipeEnabled = new Map(Object.entries(j.recipes));
+            if (j.excluded) excludedItems = new Set(j.excluded);
+            if (j.stationLevel) document.getElementById('stationLevel').value = j.stationLevel;
+            if (j.rocketType) document.getElementById('rocketType').value = j.rocketType;
+            if (j.techLevel) document.getElementById('techLevel').value = j.techLevel;
+            if (j.statueCount) document.getElementById('statueCount').value = j.statueCount;
+            if (j.labLevel) document.getElementById('labLevel').value = j.labLevel;
+            if (j.labCount) document.getElementById('labCount').value = j.labCount;
+            updateSpaceStation(); updateStatue(); updateLab();
+            renderLevelPanel(); updateRecipeCount();
+        }
+
+        // 其余辅助函数、LP构建、求解函数
+        function buildLp(active, ignored, allowExternal, fixedDemands, reductionFactor) {
+            const allDemands = [...demands, ...fixedDemands];
+            const demandSet = new Set(allDemands.map(d => d.item));
+            const producers = new Set(), consumers = new Set();
+            active.forEach(r => {
+                Object.keys(r.outputs).forEach(k => { if (!ignored.has(k) && !isRaw(k) && !isExcluded(k)) producers.add(k); });
+                Object.keys(r.inputs).forEach(k => { if (!ignored.has(k) && !isRaw(k) && !isExcluded(k)) consumers.add(k); });
+                Object.keys(r.upkeep).forEach(k => { if (!ignored.has(k) && !isRaw(k) && !isExcluded(k)) consumers.add(k); });
+            });
+            const items = new Set([...demandSet].filter(i => !ignored.has(i) && !isRaw(i) && !isExcluded(i)));
+            producers.forEach(i => { if (!demandSet.has(i)) items.add(i); });
+            const missing = [...consumers].filter(i => !producers.has(i) && !ignored.has(i) && !isRaw(i) && !isExcluded(i) && !demandSet.has(i));
+
+            const varNames = active.map((_, i) => `x${i}`);
+            const rows = {}; [...items].forEach((it, idx) => rows[it] = `r${idx}`);
+            let lp = `MIN\nOBJ: ${varNames.join(' + ')}\nST\n`;
+            items.forEach(it => {
+                let expr = '';
+                active.forEach((r, i) => {
+                    let c = 0;
+                    if (isPowerItem(it)) {
+                        if (r.outputs[it]) c += r.outputs[it];
+                        if (r.inputs[it]) c -= r.inputs[it];
+                        if (r.upkeep[it]) c -= r.upkeep[it] * (it.startsWith('maintenance') ? (1 - reductionFactor) : 1);
+                    } else {
+                        if (r.outputs[it]) c += (60 / r.duration) * r.outputs[it];
+                        if (r.inputs[it]) c -= (60 / r.duration) * r.inputs[it];
+                        if (r.upkeep[it]) c -= r.upkeep[it] * (it.startsWith('maintenance') ? (1 - reductionFactor) : 1);
+                    }
+                    if (Math.abs(c) > 1e-9) expr += (expr ? ' ' : '') + (c >= 0 && expr ? '+ ' : '') + (c >= 0 ? `${c} ${varNames[i]}` : `- ${-c} ${varNames[i]}`);
+                });
+                if (!expr) return;
+                const totalDr = allDemands.filter(d => d.item === it).reduce((s, d) => s + d.rate, 0);
+                if (demandSet.has(it)) lp += ` ${rows[it]}: ${expr} >= ${totalDr}\n`;
+                else lp += ` ${rows[it]}: ${expr} ${allowExternal ? '>= 0' : '= 0'}\n`;
+            });
+            return { lpString: lp + 'END\n', varNames, missing };
+        }
+
+        async function calculate() {
+            const diag = document.getElementById('diagnosticOutput');
+            diag.style.display = 'none';
+            const ignored = new Set([...document.querySelectorAll('.ignoreCheck:checked')].map(cb => cb.value.toLowerCase()));
+            const allowExternal = document.getElementById('allowExternal').checked;
+            const hideStage = document.getElementById('hideStage').checked;
+
+            const statueCount = parseInt(document.getElementById('statueCount').value) || 0;
+            const reductionFactor = getMaintenanceReduction(statueCount);
+            const fixedDemands = getAllFixedDemands();
+            const active = getActiveRecipes();
+
+            if (!active.length) {
+                document.getElementById('resultMessage').textContent = '没有启用的配方。';
+                document.getElementById('resultArea').style.display = 'block';
+                return;
+            }
+
+            const { lpString, varNames, missing } = buildLp(active, ignored, allowExternal, fixedDemands, reductionFactor);
+
+            if (missing.length) {
+                diag.style.display = 'block';
+                diag.innerHTML = `⚠️ 以下物品无生产配方：<br>${missing.map(m => `${t(m)} (${m}) <span class="missing-producer" data-item="${m}">🔧 启用建筑</span>`).join('<br>')}`;
+                diag.querySelectorAll('.missing-producer').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const item = el.dataset.item;
+                        recipes.filter(r => r.outputs[item] && !r.isHidden).forEach(r => {
+                            const sn = getSeriesName(r.buildingId);
+                            seriesEnabled.set(sn, true);
+                            seriesSelectedLevel.set(sn, r.buildingLevel);
+                            recipeEnabled.set(r.id, true);
+                        });
+                        updateRecipeCount();
+                        calculate();
+                    });
+                });
+            }
+
+            const sol = (await Module()).solve(lpString);
+            document.getElementById('resultArea').style.display = 'block';
+            const tbody = document.querySelector('#resultTable tbody');
+            tbody.innerHTML = '';
+            const balTbody = document.querySelector('#balanceTable tbody');
+            balTbody.innerHTML = '';
+
+            const labN = parseInt(document.getElementById('labCount').value) || 0;
+            const stationLvl = parseInt(document.getElementById('stationLevel').value) || 0;
+            const researchOutput = 48 * (1 + stationLvl * 0.05) * labN;
+            document.getElementById('resultMessage').textContent = sol.Status === 'Optimal' ? `✅ 最优解 (研究产出: ${researchOutput.toFixed(1)}/分钟)` : `❌ 状态: ${sol.Status}`;
+
+            if (sol.Status === 'Optimal') {
+                const vals = varNames.map((n, i) => ({ idx: i, val: sol.Columns[n]?.Primal || 0 })).filter(v => v.val > 0.0001);
+                vals.forEach(v => {
+                    const r = active[v.idx];
+                    if (hideStage && /stage/i.test(r.name)) return;
+                    const row = tbody.insertRow();
+                    row.insertCell().textContent = t(r.name);
+                    row.insertCell().textContent = t(r.buildingName);
+                    row.insertCell().textContent = r.buildingLevel;
+                    row.insertCell().textContent = v.val.toFixed(2);
+                    row.insertCell().textContent = Object.entries(r.inputs).map(([k, q]) => `${t(k)}×${(isPowerItem(k) ? q * v.val : ((60 / r.duration) * q * v.val)).toFixed(2)}`).join(', ') || '无';
+                    row.insertCell().textContent = Object.entries(r.outputs).map(([k, q]) => `${t(k)}×${(isPowerItem(k) ? q * v.val : ((60 / r.duration) * q * v.val)).toFixed(2)}`).join(', ') || '无';
+                });
+
+                const itemBal = new Map();
+                vals.forEach(v => {
+                    const r = active[v.idx], y = v.val;
+                    for (const [item, qty] of Object.entries(r.outputs)) {
+                        if (ignored.has(item) || isRaw(item) || isExcluded(item)) continue;
+                        const e = itemBal.get(item) || { prod: 0, cons: 0 };
+                        e.prod += isPowerItem(item) ? qty * y : (60 / r.duration) * qty * y;
+                        itemBal.set(item, e);
+                    }
+                    for (const [item, qty] of Object.entries(r.inputs)) {
+                        if (ignored.has(item) || isRaw(item) || isExcluded(item)) continue;
+                        const e = itemBal.get(item) || { prod: 0, cons: 0 };
+                        e.cons += isPowerItem(item) ? qty * y : (60 / r.duration) * qty * y;
+                        itemBal.set(item, e);
+                    }
+                    for (const [item, qty] of Object.entries(r.upkeep)) {
+                        if (ignored.has(item) || isRaw(item) || isExcluded(item)) continue;
+                        const e = itemBal.get(item) || { prod: 0, cons: 0 };
+                        e.cons += qty * y * (item.startsWith('maintenance') ? (1 - reductionFactor) : 1);
+                        itemBal.set(item, e);
+                    }
+                });
+
+                [...demands, ...fixedDemands].forEach(d => {
+                    if (ignored.has(d.item) || isRaw(d.item) || isExcluded(d.item)) return;
+                    const e = itemBal.get(d.item) || { prod: 0, cons: 0 };
+                    e.cons += d.rate;
+                    itemBal.set(d.item, e);
+                });
+
+                const demandSet = new Set(demands.map(d => d.item));
+                [...itemBal.entries()].sort((a, b) => a[0].localeCompare(b[0])).forEach(([item, { prod, cons }]) => {
+                    if (hideStage && /stage/i.test(item)) return;
+                    const row = balTbody.insertRow();
+                    row.insertCell().textContent = t(item);
+                    row.insertCell().textContent = prod.toFixed(2);
+                    row.insertCell().textContent = cons.toFixed(2);
+                    const net = prod - cons;
+                    const displayNet = Math.abs(net) < 1e-6 ? 0 : net;
+                    row.insertCell().textContent = (displayNet >= 0 ? '+' : '') + displayNet.toFixed(4);
+                    const opCell = row.insertCell();
+                    if (!demandSet.has(item) && Math.abs(net) > 1e-6 && net > 1e-6) {
+                        const fixBtn = document.createElement('span');
+                        fixBtn.className = 'fix-btn';
+                        fixBtn.textContent = '🔧 修复';
+                        fixBtn.addEventListener('click', () => {
+                            excludedItems.add(item.toLowerCase());
+                            calculate();
+                        });
+                        opCell.appendChild(fixBtn);
+                        row.style.color = 'red';
+                    }
+                });
+            }
+        }
+
+        function updateRecipeCount() {
+            const active = getActiveRecipes();
+            document.getElementById('recipeCount').textContent = `共 ${active.length} 个启用配方`;
+        }
+
+        function updateLevelStat() {
+            const total = seriesList.length;
+            const enabled = [...seriesEnabled.values()].filter(Boolean).length;
+            document.getElementById('levelStat').textContent = `共 ${total} 个建筑系列，启用 ${enabled} 个`;
+        }
+
+        function renderLevelPanel() {
+            const body = document.getElementById('levelModalBody');
+            body.innerHTML = '';
+            seriesList.forEach(s => {
+                const div = document.createElement('div');
+                div.className = 'level-series';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = seriesEnabled.get(s.name);
+                cb.addEventListener('change', () => {
+                    seriesEnabled.set(s.name, cb.checked);
+                    updateRecipeCount();
+                    updateLevelStat();
+                });
+                const label = document.createElement('span');
+                label.textContent = t(s.name) + ': ';
+                const sel = document.createElement('select');
+                sel.dataset.series = s.name;
+                s.levels.forEach(lv => {
+                    const opt = document.createElement('option');
+                    opt.value = lv.level;
+                    opt.textContent = `Lv${lv.level}`;
+                    sel.appendChild(opt);
+                });
+                sel.value = seriesSelectedLevel.get(s.name) || s.levels[s.levels.length - 1].level;
+                sel.addEventListener('change', () => {
+                    seriesSelectedLevel.set(s.name, parseInt(sel.value));
+                    updateRecipeCount();
+                    updateLevelStat();
+                });
+                div.appendChild(cb);
+                div.appendChild(label);
+                div.appendChild(sel);
+                body.appendChild(div);
+            });
+            updateRecipeCount();
+            updateLevelStat();
+        }
+
+        function updateItemSuggestions() {
+            const suggest = document.getElementById('itemSuggest');
+            if (!suggest) return;
+            suggest.innerHTML = '';
+            [...allItemsSet].filter(i => !isRaw(i)).sort().forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item;
+                suggest.appendChild(opt);
+            });
+        }
+
+        function updateDemandList() {
+            const ul = document.getElementById('demandList');
+            ul.innerHTML = '';
+            demands.forEach((d, idx) => {
+                const li = document.createElement('li');
+                li.textContent = `${t(d.item)} (${d.item}): ${d.rate.toFixed(2)}/分 `;
+                const btn = document.createElement('button');
+                btn.textContent = '❌';
+                btn.style.cssText = 'background:none;border:none;cursor:pointer;';
+                btn.addEventListener('click', () => { demands.splice(idx, 1); updateDemandList(); });
+                li.appendChild(btn);
+                ul.appendChild(li);
+            });
+        }
+
+        function renderExcludeList(filter = '') {
+            const list = document.getElementById('excludeItemList');
+            list.innerHTML = '';
+            const items = [...allItemsSet].filter(i => !isRaw(i) && (i.toLowerCase().includes(filter.toLowerCase()) || t(i).toLowerCase().includes(filter.toLowerCase()))).sort();
+            items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'exclude-item';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = excludedItems.has(item.toLowerCase());
+                cb.addEventListener('change', () => {
+                    if (cb.checked) excludedItems.add(item.toLowerCase());
+                    else excludedItems.delete(item.toLowerCase());
+                });
+                const name = document.createElement('span');
+                name.className = 'exclude-item-name';
+                name.textContent = `${t(item)} (${item})`;
+                div.appendChild(cb);
+                div.appendChild(name);
+                list.appendChild(div);
+            });
+        }
+
+        // 初始化
+        function applyData(json) {
+            fullData = json;
+            const p = parseData(json);
+            recipes = p.recipes; allItemsSet = new Set(p.allItems); seriesList = p.seriesList;
+            initializeAll();
+            populateLabLevels();
+            enableUI(true);
+            renderAll();
+        }
+        function enableUI(b) {
+            document.querySelectorAll('.btn').forEach(btn => btn.disabled = !b);
+            document.getElementById('stationLevel').disabled = !b;
+            document.getElementById('rocketType').disabled = !b;
+            document.getElementById('techLevel').disabled = !b;
+            document.getElementById('statueCount').disabled = !b;
+            document.getElementById('labLevel').disabled = !b;
+            document.getElementById('labCount').disabled = !b;
+        }
+        function renderAll() {
+            document.getElementById('dataStatus').textContent = fullData ? `已加载 ${fullData.machines_and_buildings.length} 建筑` : '未加载';
+            renderLevelPanel(); updateItemSuggestions(); updateDemandList(); updateRecipeCount();
+            updateSpaceStation(); updateStatue(); updateLab();
+        }
+
+        // 事件绑定
+        document.getElementById('levelModalBtn').addEventListener('click', () => document.getElementById('levelModal').style.display = 'block');
+        document.getElementById('levelModalClose').addEventListener('click', () => document.getElementById('levelModal').style.display = 'none');
+        document.getElementById('recipeSelectBtn').addEventListener('click', openRecipeModal);
+        document.getElementById('calculateBtn').addEventListener('click', calculate);
+        document.getElementById('jsonFile').addEventListener('change', async e => { if(e.target.files[0]) applyData(JSON.parse(await e.target.files[0].text())); });
+        document.getElementById('transFile').addEventListener('change', async e => { if(e.target.files[0]) { const j=JSON.parse(await e.target.files[0].text()); translation={}; for(const k in j) translation[k.toLowerCase()]=j[k]; renderAll(); } });
+        document.getElementById('recipeSearch').addEventListener('input', () => {
+            const blds = fullData.machines_and_buildings.filter(b => !HIDDEN_SERIES.some(k => b.name.toLowerCase().includes(k.toLowerCase())));
+            const entries = blds.map(b => {
+                const sn = getSeriesName(b.id);
+                const lv = seriesList.find(s => s.name === sn)?.levels.find(lv => lv.buildingId === b.id)?.level || 1;
+                const recs = (b.recipes || []).map(r => recipes.find(rr => rr.id === r.id)).filter(Boolean);
+                const buildingOn = seriesEnabled.get(sn) !== false && seriesSelectedLevel.get(sn) === lv;
+                return { buildingId: b.id, buildingName: b.name, category: b.category, level: lv, recipes: recs, buildingEnabled: buildingOn };
+            });
+            renderModalEntries(entries);
+        });
+        document.getElementById('closeModalBtn').addEventListener('click', ()=> document.getElementById('recipeModal').style.display='none');
+        document.getElementById('exportAllBtn').addEventListener('click', exportAllSettings);
+        document.getElementById('importAllBtn').addEventListener('click', ()=> document.getElementById('importAllFile').click());
+        document.getElementById('importAllFile').addEventListener('change', async e => { if(e.target.files[0]) await importAllSettings(e.target.files[0]); });
+        document.getElementById('excludeItemsBtn').addEventListener('click', () => { renderExcludeList(); document.getElementById('excludeModal').style.display = 'block'; });
+        document.getElementById('closeExcludeBtn').addEventListener('click', ()=> document.getElementById('excludeModal').style.display='none');
+        document.getElementById('excludeSearch').addEventListener('input', e => renderExcludeList(e.target.value));
+        document.getElementById('excludeDoneBtn').addEventListener('click', ()=>{ document.getElementById('excludeModal').style.display='none'; });
+        document.getElementById('stationLevel').addEventListener('input', updateSpaceStation);
+        document.getElementById('rocketType').addEventListener('change', updateSpaceStation);
+        document.getElementById('techLevel').addEventListener('input', updateSpaceStation);
+        document.getElementById('statueCount').addEventListener('input', updateStatue);
+        document.getElementById('labCount').addEventListener('input', updateLab);
+        document.getElementById('labLevel').addEventListener('change', updateLab);
+
+        // 自动加载
+        (async ()=>{
+            try { applyData(await (await fetch('./data.json')).json()); } catch(e) {}
+            try { const resp = await fetch('./zh_en.json'); if(resp.ok) { const j = await resp.json(); translation = {}; for(const k in j) translation[k.toLowerCase()] = j[k]; renderAll(); } } catch(e) {}
+        })();
+    </script>
+</body>
+</html>
