@@ -610,20 +610,30 @@
             const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='factory_settings.json'; a.click();
         }
 
+        function applySettingsFromJSON(j) {
+            if (j.seriesEnabled) seriesEnabled = new Map(Object.entries(j.seriesEnabled));
+            if (j.seriesLevels) seriesSelectedLevel = new Map(Object.entries(j.seriesLevels));
+            if (j.recipes) recipeEnabled = new Map(Object.entries(j.recipes));
+            if (j.excluded) excludedItems = new Set(j.excluded.map(s => s.toLowerCase()));
+            if (j.stationLevel !== undefined) document.getElementById('stationLevel').value = j.stationLevel;
+            if (j.rocketType !== undefined) document.getElementById('rocketType').value = j.rocketType;
+            if (j.techLevel !== undefined) document.getElementById('techLevel').value = j.techLevel;
+            if (j.statueCount !== undefined) document.getElementById('statueCount').value = j.statueCount;
+            if (j.labLevel !== undefined && labMeta.length > 0) {
+                const exists = labMeta.some(l => l.buildingId === j.labLevel);
+                if (exists) document.getElementById('labLevel').value = j.labLevel;
+            }
+            if (j.labCount !== undefined) document.getElementById('labCount').value = j.labCount;
+            updateSpaceStation();
+            updateStatue();
+            updateLab();
+            renderLevelPanel();
+            updateRecipeCount();
+        }
+
         async function importAllSettings(file){
             const j=JSON.parse(await file.text());
-            if(j.seriesEnabled) seriesEnabled=new Map(Object.entries(j.seriesEnabled));
-            if(j.seriesLevels) seriesSelectedLevel=new Map(Object.entries(j.seriesLevels));
-            if(j.recipes) recipeEnabled=new Map(Object.entries(j.recipes));
-           if (j.excluded) excludedItems = new Set(j.excluded.map(s => s.toLowerCase()));
-            if(j.stationLevel) document.getElementById('stationLevel').value=j.stationLevel;
-            if(j.rocketType) document.getElementById('rocketType').value=j.rocketType;
-            if(j.techLevel) document.getElementById('techLevel').value=j.techLevel;
-            if(j.statueCount) document.getElementById('statueCount').value=j.statueCount;
-            if(j.labLevel) document.getElementById('labLevel').value=j.labLevel;
-            if(j.labCount) document.getElementById('labCount').value=j.labCount;
-            updateSpaceStation(); updateStatue(); updateLab();
-            renderLevelPanel(); updateRecipeCount();
+            applySettingsFromJSON(j);
         }
 
         function renderLevelPanel(){
@@ -717,9 +727,30 @@
         window.openRecipeModal=openRecipeModal;
         window.openExcludeModal=openExcludeModal;
 
-        (async ()=>{
-            try{ applyData(await(await fetch('./data.json')).json()); }catch(e){}
-            try{ const resp=await fetch('./zh_en.json'); if(resp.ok){ const j=await resp.json(); translation={}; for(const k in j) translation[k.toLowerCase()]=j[k]; renderAll(); } }catch(e){}
+        (async () => {
+            let dataLoaded = false;
+            try {
+                const resp = await fetch('./data.json');
+                if (resp.ok) { applyData(await resp.json()); dataLoaded = true; }
+            } catch(e) {}
+            try {
+                const resp = await fetch('./zh_en.json');
+                if (resp.ok) {
+                    const j = await resp.json();
+                    translation = {};
+                    for (const k in j) translation[k.toLowerCase()] = j[k];
+                }
+            } catch(e) {}
+            // 加载配方设置文件
+            try {
+                const resp = await fetch('./factory_settings.json');
+                if (resp.ok) {
+                    const settings = await resp.json();
+                    applySettingsFromJSON(settings);
+                }
+            } catch(e) {}
+            if (!dataLoaded) document.getElementById('dataStatus').textContent = 'data.json 加载失败，请手动上传';
+            renderAll(); // 统一刷新界面
         })();
     </script>
 </body>
