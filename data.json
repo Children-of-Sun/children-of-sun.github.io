@@ -19346,7 +19346,7 @@
                     ],
                     "outputs": [
                         {
-                            "name": "RocketT1 RLP",
+                            "name": "Rocket T1 RLP",
                             "quantity": 1
                         }
                     ],
@@ -19376,7 +19376,7 @@
                     ],
                     "outputs": [
                         {
-                            "name": "RocketT1 thing",
+                            "name": "Rocket T1 thing",
                             "quantity": 1
                         }
                     ],
@@ -19406,7 +19406,7 @@
                     ],
                     "outputs": [
                         {
-                            "name": "RocketT2 RLP",
+                            "name": "Rocket T2 RLP",
                             "quantity": 1
                         }
                     ],
@@ -19436,7 +19436,7 @@
                     ],
                     "outputs": [
                         {
-                            "name": "RocketT2 thing",
+                            "name": "Rocket T2 thing",
                             "quantity": 1
                         }
                     ],
